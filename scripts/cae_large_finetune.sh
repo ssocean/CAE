@@ -3,7 +3,7 @@ my_name=${tmp_my_name%.*}
 
 OUTPUT_DIR='./output/'$my_name
 DATA_PATH=/path/to/imagenet1k/train
-TOKENIZER_PATH=./tokenizer-weights
+TOKENIZER_PATH=./tokenizer-weights-
 
 ADDRESS=ADDR_FOR_THIS_MACHINE                                                                                 
 NNODES=4     

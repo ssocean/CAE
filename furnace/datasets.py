@@ -9,7 +9,7 @@ from furnace.transforms import RandomResizedCropAndInterpolationWithTwoPic
 from timm.data import create_transform
 
 from dall_e.utils import map_pixels
-from furnace.masking_generator import MaskingGenerator, RandomMaskingGenerator
+from furnace.masking_generator import ComplementaryMaskingGenerator, MaskingGenerator, RandomMaskingGenerator
 from furnace.dataset_folder import ImageFolder
 
 def preprocess_vqgan(x):
@@ -80,6 +80,11 @@ class DataAugmentationForCAE(object):
             self.masked_position_generator = RandomMaskingGenerator(
                 args.window_size, ratio_masking_patches=args.ratio_mask_patches
             )
+        elif args.mask_generator == 'complementary':
+            print('----------------------complementary--------------------------------------')
+            self.masked_position_generator = ComplementaryMaskingGenerator(
+                args.window_size, ratio_masking_patches=args.ratio_mask_patches
+            )
         
 
     def __call__(self, image):
@@ -98,11 +103,14 @@ class DataAugmentationForCAE(object):
         repr += ")"
         return repr
 
+# def build_cae_pretraining_dataset(args):
+#     transform = DataAugmentationForCAE(args)
+#     print("Data Aug = %s" % str(transform))
+#     return ImageFolder(args.data_path, transform=transform)
 def build_cae_pretraining_dataset(args):
     transform = DataAugmentationForCAE(args)
     print("Data Aug = %s" % str(transform))
-    return ImageFolder(args.data_path, transform=transform)
-
+    return datasets.CIFAR100(args.data_path, train=True, transform=transform,download=True)
 
 def build_dataset(is_train, args):
     transform = build_transform(is_train, args)

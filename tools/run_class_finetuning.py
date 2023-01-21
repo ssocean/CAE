@@ -9,7 +9,11 @@ import os
 import shutil
 
 from pathlib import Path
-
+import os
+import shutil
+import sys
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
 from timm.data.mixup import Mixup
 from timm.models import create_model
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
@@ -193,7 +197,7 @@ def get_args():
     parser.add_argument('--enable_linear_eval', action='store_true', default=False)
     parser.add_argument('--enable_multi_print', action='store_true',default=False, help='allow each gpu prints something')
 
-    parser.add_argument('--exp_name', default='', type=str,
+    parser.add_argument('--exp_name', default='cae-cifar', type=str,
                         help='name of exp. it is helpful when save the checkpoint')
 
     known_args, _ = parser.parse_known_args()

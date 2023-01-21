@@ -5,6 +5,7 @@ from typing import Iterable
 
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 
 import furnace.utils as utils
 import torch.nn.functional as F
@@ -27,34 +28,40 @@ def train_one_epoch(model: torch.nn.Module, d_vae: torch.nn.Module,
     metric_logger.add_meter('min_lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 10
-
-    for step, (batch, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    # print(data_loader)
+    print(metric_logger.log_every(data_loader, print_freq, header))
+    for step, (batch, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):#
         # assign learning rate & weight decay for each step
         it = start_steps + step  # global training iteration
         if lr_schedule_values is not None or wd_schedule_values is not None:
-            for i, param_group in enumerate(optimizer.param_groups):
+            for i, param_group in tqdm(enumerate(optimizer.param_groups)):
                 if lr_schedule_values is not None:
                     param_group["lr"] = lr_schedule_values[it] * param_group["lr_scale"]
                 if wd_schedule_values is not None and param_group["weight_decay"] > 0:
                     param_group["weight_decay"] = wd_schedule_values[it]
-
-        samples, images, bool_masked_pos = batch
+        
+        # print('DONE')
+        samples, images,bool_masked_pos  = batch
+        # print(bool_masked_pos.shape)
         images = images.to(device, non_blocking=True)
         samples = samples.to(device, non_blocking=True)
         bool_masked_pos = bool_masked_pos.to(device, non_blocking=True)
-
+        # print('DONE')
         with torch.no_grad():
             input_ids = d_vae.get_codebook_indices(images).flatten(1)
             bool_masked_pos = bool_masked_pos.flatten(1).to(torch.bool)
+            # print(input_ids.shape)
+            # print(bool_masked_pos.shape)
             labels = input_ids[bool_masked_pos]
-
+        # print('DONE')
         with torch.cuda.amp.autocast():
             outputs, latent, latent_target = model(samples, bool_masked_pos=bool_masked_pos, return_all_tokens=False)
 
             loss_main = nn.CrossEntropyLoss()(input=outputs.float(), target=labels)
+            # print(latent.shape, latent_target.shape)
             loss_align = args.align_loss_weight * loss_selector('mse', latent.float(), latent_target.detach().float())
             loss = loss_main + loss_align
-
+        # print('DONE')
         loss_value = loss.item()
         loss_main_value = loss_main.item()
         loss_align_value = loss_align.item()
@@ -71,7 +78,7 @@ def train_one_epoch(model: torch.nn.Module, d_vae: torch.nn.Module,
         loss_scale_value = loss_scaler.state_dict()["scale"]
 
         torch.cuda.synchronize()
-
+        # print('DONE')
         mlm_acc = (outputs.max(-1)[1] == labels).float().mean().item()
         metric_logger.update(mlm_acc=mlm_acc)
         if log_writer is not None:

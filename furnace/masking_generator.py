@@ -90,3 +90,31 @@ class RandomMaskingGenerator:
         np.random.shuffle(mask)
         
         return mask
+
+class ComplementaryMaskingGenerator:
+    def __init__(
+            self, input_size, ratio_masking_patches):
+
+        if not isinstance(input_size, tuple):
+            input_size = (input_size, ) * 2
+
+        self.height, self.width = input_size
+        
+        self.num_patches = self.height * self.width
+        self.num_masking_patches = ratio_masking_patches * self.num_patches
+        assert (self.num_masking_patches).is_integer() and (self.num_patches%self.num_masking_patches==0),'Number of patches should be integer and identical'
+        self.num_set = int(1/ratio_masking_patches)
+    def __repr__(self):
+        repr_str = "Maks: total patches {}, mask patches {}".format(
+            self.num_patches, self.num_masking_patches
+        )
+        return repr_str
+    def __call__(self):
+
+        stack_lst = [np.ones(int(self.num_masking_patches)) * i for i in range(self.num_set)]
+        mask = np.hstack(stack_lst)
+        np.random.shuffle(mask)
+        rst = []
+        for i in range(self.num_set):
+            rst.append((mask==i)*1)
+        return np.array(rst)

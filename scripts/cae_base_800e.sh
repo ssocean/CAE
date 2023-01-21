@@ -5,18 +5,18 @@ OUTPUT_DIR='./output/'$my_name
 DATA_PATH=/path/to/imagenet1k/train
 TOKENIZER_PATH=./tokenizer-weights
 
-ADDRESS=ADDR_FOR_THIS_MACHINE                                                                                 
-NNODES=4     
-RANK=RANK_FOR_THIS_MACHINE                                                                                                                        
+ADDRESS=127.0.0.1                                                                             
+NNODES=1   
+RANK=0                                                                                                                    
 
 # ============================ pretraining ============================
-OMP_NUM_THREADS=1 python -m torch.distributed.launch \
+OMP_NUM_THREADS=1 python3 -m torch.distributed.launch \
   --nproc_per_node=8 \
   --nnodes=$NNODES \
   --node_rank=$RANK \
   --master_addr=$ADDRESS \
   --master_port=8899 \
-  tools/run_pretraining.py \
+  /opt/data/private/CAE/tools/run_pretraining.py \
   --data_path ${DATA_PATH} \
   --output_dir ${OUTPUT_DIR} \
   --model cae_base_patch16_224_8k_vocab --discrete_vae_weight_path ${TOKENIZER_PATH} \

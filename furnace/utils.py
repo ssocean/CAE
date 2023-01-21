@@ -18,7 +18,7 @@ from collections import defaultdict, deque
 import datetime
 import numpy as np
 from timm.utils import get_state_dict
-
+from tqdm import tqdm
 from pathlib import Path
 
 import torch
@@ -131,6 +131,7 @@ class MetricLogger(object):
         self.meters[name] = meter
 
     def log_every(self, iterable, print_freq, header=None):
+        
         i = 0
         if not header:
             header = ''
@@ -151,7 +152,7 @@ class MetricLogger(object):
             log_msg.append('max mem: {memory:.0f}')
         log_msg = self.delimiter.join(log_msg)
         MB = 1024.0 * 1024.0
-        for obj in iterable:
+        for obj in tqdm(iterable):
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
@@ -175,8 +176,7 @@ class MetricLogger(object):
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print('{} Total time: {} ({:.4f} s / it)'.format(
             header, total_time_str, total_time / len(iterable)))
-
-
+        
 class TensorboardLogger(object):
     def __init__(self, log_dir):
         self.writer = SummaryWriter(logdir=log_dir)
@@ -382,6 +382,43 @@ class NativeScalerWithGradNormCount:
     def load_state_dict(self, state_dict):
         self._scaler.load_state_dict(state_dict)
 
+class NativeScalerForDecoupled:
+    state_dict_key = "amp_scaler"
+
+    def __init__(self):
+        self._scaler = torch.cuda.amp.GradScaler()
+
+    def __call__(self, loss_main,loss_align, optimizer_encoder,optimizer_decoder, clip_grad=None, parameters_encoder=None,parameters_decoder=None, create_graph=False, update_grad=True,need_step=False):
+        self._scaler.scale(loss_main).backward(create_graph=create_graph,retain_graph=True)
+        self._scaler.scale(loss_align).backward(create_graph=create_graph,retain_graph=True)
+        if need_step:
+            if update_grad:
+                if clip_grad is not None:
+                    assert parameters_encoder and parameters_decoder is not None
+                    self._scaler.unscale_(optimizer_encoder)
+                    self._scaler.unscale_(optimizer_decoder)  # unscale the gradients of optimizer's assigned params in-place
+                    norm_1 = torch.nn.utils.clip_grad_norm_(parameters_encoder, clip_grad)
+                    norm_2 = torch.nn.utils.clip_grad_norm_(parameters_decoder, clip_grad)
+                else:
+                    self._scaler.unscale_(optimizer_encoder)
+                    self._scaler.unscale_(optimizer_decoder)
+                    norm_1 = get_grad_norm_(parameters_encoder)
+                    norm_2 = get_grad_norm_(parameters_decoder)
+            
+                self._scaler.step(optimizer_encoder)
+                self._scaler.step(optimizer_decoder)
+                self._scaler.update()
+            else:
+                norm_1 = None
+                norm_2 = None
+            return norm_1+norm_2
+        return None
+
+    def state_dict(self):
+        return self._scaler.state_dict()
+
+    def load_state_dict(self, state_dict):
+        self._scaler.load_state_dict(state_dict)
 
 def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     if isinstance(parameters, torch.Tensor):

@@ -225,11 +225,12 @@ class Dalle_VAE(BasicVAE):
         self.image_size = image_size
 
     def load_model(self, model_dir, device):
+        print('DALLE-VAE loading weights')
         self.encoder = load_model(os.path.join(model_dir, "encoder.pkl"), device)
         self.decoder = load_model(os.path.join(model_dir, "decoder.pkl"), device)
 
     def decode(self, img_seq):
-        bsz = img_seq.size()[0]
+        bsz = img_seq.size()[0] # batch size
         img_seq = img_seq.view(bsz, self.image_size // 8, self.image_size // 8)
         z = F.one_hot(img_seq, num_classes=self.encoder.vocab_size).permute(0, 3, 1, 2).float()
         return self.decoder(z).float()

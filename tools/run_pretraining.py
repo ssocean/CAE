@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import sys
 import numpy as np
 import time
 import torch
@@ -7,7 +8,8 @@ import torch.backends.cudnn as cudnn
 import json
 import os
 import shutil
-
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
 from pathlib import Path
 
 from timm.models import create_model
@@ -110,7 +112,7 @@ def get_args():
     # distributed training parameters
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
-    parser.add_argument('--local_rank', default=-1, type=int)
+    parser.add_argument('--local_rank', default=0, type=int)
     parser.add_argument('--dist_on_itp', action='store_true')
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
 
@@ -192,7 +194,7 @@ def main(args):
     np.random.seed(seed)
 
     cudnn.benchmark = True
-
+    print(args)
     model = get_model(args)
     patch_size = model.encoder.patch_embed.patch_size
     print("Patch size = %s" % str(patch_size))
