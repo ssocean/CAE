@@ -12,7 +12,59 @@ from models.modeling_cae_helper import *
 
 def trunc_normal_(tensor, mean=0., std=1.):
     __call_trunc_normal_(tensor, mean=mean, std=std, a=-std, b=std)
+"""
+    def forward(self, x, bool_masked_pos, return_all_tokens=None):
+        batch_size = x.size(0)
 
+        '''
+        Encoder
+        Output shape:
+            [bs, num_visible + 1, C]
+        '''
+        x_unmasked = self.encoder(x, bool_masked_pos=bool_masked_pos)
+
+        # encoder to decoder projection
+        if self.encoder_to_decoder is not None:
+            x_unmasked = self.encoder_to_decoder(x_unmasked)
+            x_unmasked = self.encoder_to_decoder_norm(x_unmasked)
+
+        '''
+        Alignment constraint
+        '''
+        with torch.no_grad():
+            latent_target = self.teacher(x, bool_masked_pos=(~bool_masked_pos))
+            latent_target = latent_target[:, 1:, :] # remove class token
+            if self.encoder_to_decoder is not None:
+                latent_target = self.encoder_to_decoder_norm(self.encoder_to_decoder(latent_target.detach()))
+
+            self.momentum_update(self.args.base_momentum)
+
+        '''
+        Latent contextual regressor and decoder
+        '''
+        b, num_visible_plus1, dim = x_unmasked.shape
+        # remove class token
+        x_unmasked = x_unmasked[:, 1:, :]
+
+        num_masked_patches = self.num_patches - (num_visible_plus1-1)
+        
+        # generate position embeddings.
+        pos_embed = self.encoder.build_2d_sincos_position_embedding(dim, use_cls_token=True).expand(batch_size, self.num_patches+1, dim).cuda(x_unmasked.device)
+
+        # pos embed for masked patches
+        pos_embed_masked = pos_embed[:,1:][bool_masked_pos].reshape(batch_size, -1, dim) 
+
+        # pos embed for unmasked patches
+        pos_embed_unmasked = pos_embed[:,1:][~bool_masked_pos].reshape(batch_size, -1, dim) 
+
+        # masked embedding '''
+        x_masked = self.mask_token.expand(batch_size, num_masked_patches, -1)
+
+        logits, latent_pred = self.pretext_neck(x_masked, x_unmasked, pos_embed_masked, pos_embed_unmasked, bool_masked_pos)
+        logits = logits.view(-1, logits.shape[2])
+
+        return logits, latent_pred, latent_target
+"""
 
 class VisionTransformerForMaskedImageModeling(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3, vocab_size=8192, embed_dim=768, depth=12,
@@ -96,6 +148,68 @@ class VisionTransformerForMaskedImageModeling(nn.Module):
         Output shape:
             [bs, num_visible + 1, C]
         '''
+        x_unmasked = self.encoder(x, bool_masked_pos=bool_masked_pos)
+
+        # encoder to decoder projection
+        if self.encoder_to_decoder is not None:
+            x_unmasked = self.encoder_to_decoder(x_unmasked)
+            x_unmasked = self.encoder_to_decoder_norm(x_unmasked)
+
+        '''
+        Alignment constraint
+        '''
+        with torch.no_grad():
+            latent_target = self.teacher(x, bool_masked_pos=(~bool_masked_pos))
+            latent_target = latent_target[:, 1:, :] # remove class token
+            if self.encoder_to_decoder is not None:
+                latent_target = self.encoder_to_decoder_norm(self.encoder_to_decoder(latent_target.detach()))
+
+            self.momentum_update(self.args.base_momentum)
+
+        '''
+        Latent contextual regressor and decoder
+        '''
+        b, num_visible_plus1, dim = x_unmasked.shape
+        # remove class token
+        x_unmasked = x_unmasked[:, 1:, :]
+
+        num_masked_patches = self.num_patches - (num_visible_plus1-1)
+        
+        # generate position embeddings.
+        pos_embed = self.encoder.build_2d_sincos_position_embedding(dim, use_cls_token=True).expand(batch_size, self.num_patches+1, dim).cuda(x_unmasked.device)
+
+        # pos embed for masked patches
+        pos_embed_masked = pos_embed[:,1:][bool_masked_pos].reshape(batch_size, -1, dim) 
+
+        # pos embed for unmasked patches
+        pos_embed_unmasked = pos_embed[:,1:][~bool_masked_pos].reshape(batch_size, -1, dim) 
+
+        # masked embedding '''
+        x_masked = self.mask_token.expand(batch_size, num_masked_patches, -1)
+
+        logits, latent_pred = self.pretext_neck(x_masked, x_unmasked, pos_embed_masked, pos_embed_unmasked, bool_masked_pos)
+        logits = logits.view(-1, logits.shape[2])
+
+        return logits, latent_pred, latent_target
+
+
+class CAE_Self_Learning(VisionTransformerForMaskedImageModeling):
+    def __init__(self, img_size=32, patch_size=4, in_chans=3, vocab_size=8192, 
+    embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, qk_scale=None, drop_rate=0,
+     attn_drop_rate=0, drop_path_rate=0, norm_layer=None, init_values=None, attn_head_dim=None, use_abs_pos_emb=True, init_std=0.02, args=None, **kwargs):
+        super().__init__(img_size, patch_size, in_chans, vocab_size, embed_dim, depth, num_heads, 
+        mlp_ratio, qkv_bias, qk_scale, drop_rate, attn_drop_rate, drop_path_rate, norm_layer, init_values, attn_head_dim, use_abs_pos_emb, init_std, args, **kwargs)
+    def forward(self, x, bool_masked_pos, return_all_tokens=None):
+        '''
+        自己学自己，mask 和 visable patch完全一样
+        '''
+        batch_size = x.size(0)
+
+        '''
+        Encoder
+        Output shape:
+            [bs, num_visible + 1, C]
+        '''
         x_unmasked = self.encoder(x, bool_masked_pos=~bool_masked_pos) # x_unmasked = self.encoder(x, bool_masked_pos=~bool_masked_pos) 
         # print()
         # encoder to decoder projection
@@ -165,6 +279,68 @@ class VisionTransformerForMaskedImageModeling(nn.Module):
         logits, latent_pred = self.pretext_neck(x_masked, x_unmasked, pos_embed_masked, pos_embed_unmasked, bool_masked_pos)
         logits = logits.view(-1, logits.shape[2])
         # print(f'pretext return shape:{logits.shape, latent_pred.shape, latent_target.shape}') 
+        return logits, latent_pred, latent_target
+
+
+class CAE_Same_Encoder(VisionTransformerForMaskedImageModeling):
+    def __init__(self, img_size=32, patch_size=4, in_chans=3, vocab_size=8192, 
+    embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, qk_scale=None, drop_rate=0,
+     attn_drop_rate=0, drop_path_rate=0, norm_layer=None, init_values=None, attn_head_dim=None, use_abs_pos_emb=True, init_std=0.02, args=None, **kwargs):
+        super().__init__(img_size, patch_size, in_chans, vocab_size, embed_dim, depth, num_heads, 
+        mlp_ratio, qkv_bias, qk_scale, drop_rate, attn_drop_rate, drop_path_rate, norm_layer, init_values, attn_head_dim, use_abs_pos_emb, init_std, args, **kwargs)
+        self.teacher = None
+    def forward(self, x, bool_masked_pos, return_all_tokens=None):
+        '''
+        不进行EMA 不创建Teacher模型
+        '''
+
+        batch_size = x.size(0)
+
+        '''
+        Encoder
+        Output shape:
+            [bs, num_visible + 1, C]
+        '''
+        x_unmasked = self.encoder(x, bool_masked_pos=bool_masked_pos)
+
+        # encoder to decoder projection
+        if self.encoder_to_decoder is not None:
+            x_unmasked = self.encoder_to_decoder(x_unmasked)
+            x_unmasked = self.encoder_to_decoder_norm(x_unmasked)
+
+        '''
+        Alignment constraint
+        '''
+        with torch.no_grad():
+            latent_target = self.encoder(x, bool_masked_pos=(~bool_masked_pos))
+            latent_target = latent_target[:, 1:, :] # remove class token
+            if self.encoder_to_decoder is not None:
+                latent_target = self.encoder_to_decoder_norm(self.encoder_to_decoder(latent_target.detach()))
+
+        '''
+        Latent contextual regressor and decoder
+        '''
+        b, num_visible_plus1, dim = x_unmasked.shape
+        # remove class token
+        x_unmasked = x_unmasked[:, 1:, :]
+
+        num_masked_patches = self.num_patches - (num_visible_plus1-1)
+        
+        # generate position embeddings.
+        pos_embed = self.encoder.build_2d_sincos_position_embedding(dim, use_cls_token=True).expand(batch_size, self.num_patches+1, dim).cuda(x_unmasked.device)
+
+        # pos embed for masked patches
+        pos_embed_masked = pos_embed[:,1:][bool_masked_pos].reshape(batch_size, -1, dim) 
+
+        # pos embed for unmasked patches
+        pos_embed_unmasked = pos_embed[:,1:][~bool_masked_pos].reshape(batch_size, -1, dim) 
+
+        # masked embedding '''
+        x_masked = self.mask_token.expand(batch_size, num_masked_patches, -1)
+
+        logits, latent_pred = self.pretext_neck(x_masked, x_unmasked, pos_embed_masked, pos_embed_unmasked, bool_masked_pos)
+        logits = logits.view(-1, logits.shape[2])
+
         return logits, latent_pred, latent_target
 
 
@@ -298,7 +474,7 @@ class CSCAE_Encoder_Helper(nn.Module):
         Alignment constraint
         '''
         with torch.no_grad():
-            if False:
+            if True:
                 latent_target = self.teacher(x, bool_visable_pos)
                 latent_target = latent_target[:, 1:, :] # remove class token
                 if self.encoder_to_decoder is not None:
@@ -311,7 +487,7 @@ class CSCAE_Encoder_Helper(nn.Module):
                 if self.encoder_to_decoder is not None:
                     latent_target = self.encoder_to_decoder_norm(self.encoder_to_decoder(latent_target.detach()))
 
-                self.momentum_update(self.args.base_momentum)
+                # self.momentum_update(self.args.base_momentum)
                 # generate position embeddings.
         batch_size, num_visible_plus1, dim = x_unmasked.shape
         # num_masked_patches = self.num_patches - (num_visible_plus1-1)
@@ -573,6 +749,32 @@ def cae_base_cifar(pretrained=False, **kwargs):
     return model
 
 @register_model
+def cae_SL(pretrained=False, **kwargs):
+    model = CAE_Self_Learning(img_size=32,
+        patch_size=4, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), vocab_size=8192, **kwargs)
+    model.default_cfg = _cfg()
+    if pretrained:
+        checkpoint = torch.load(
+            kwargs["init_ckpt"], map_location="cpu"
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+@register_model
+def cae_same_encoder(pretrained=False, **kwargs):
+    model = CAE_Same_Encoder(img_size=32,
+        patch_size=4, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), vocab_size=8192, **kwargs)
+    model.default_cfg = _cfg()
+    if pretrained:
+        checkpoint = torch.load(
+            kwargs["init_ckpt"], map_location="cpu"
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+@register_model
 def com_cae_cifar(pretrained=False, **kwargs):
     model = ComplementaryCAE(img_size=32,
         patch_size=4, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
@@ -613,4 +815,17 @@ def com_decoder(**kwargs):
         patch_size=4, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), vocab_size=8192, **kwargs)
     model.default_cfg = _cfg()
+    return model
+
+@register_model
+def cae_base_patch16_224_8k_com(pretrained=False, **kwargs):
+    model = CAE_Self_Learning(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), vocab_size=8192, **kwargs)
+    model.default_cfg = _cfg()
+    if pretrained:
+        checkpoint = torch.load(
+            kwargs["init_ckpt"], map_location="cpu"
+        )
+        model.load_state_dict(checkpoint["model"])
     return model

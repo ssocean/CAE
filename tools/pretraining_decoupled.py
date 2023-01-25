@@ -25,6 +25,35 @@ from furnace.engine_for_pretraining_cs import train_one_epoch_cs, train_one_epoc
 import furnace.utils as utils
 from models import modeling_cae
 import torch.distributed as dist
+import logging
+def init_logger(out_pth: str = 'logs'):
+    '''
+    初始化日志类
+    :param out_pth: 输出路径，默认为调用文件的同级目录logs
+    :return: 日志类实例对象
+    '''
+    # 日志模块
+    logger = logging.getLogger(__name__)
+    logger.setLevel(level=logging.INFO)
+    handler = logging.FileHandler(fr'{out_pth}/{time.strftime("%Y_%b_%d", time.localtime())}_log.txt')
+
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    # 输出到控制台
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    # 输出到日志
+    logger.addHandler(handler)
+    logger.addHandler(console)
+    '''
+    logger = init_logger(r'')
+    logger.info("Start print log") #一般信息
+    logger.debug("Do something") #调试显示
+    logger.warning("Something maybe fail.")#警告
+    logger.info("Finish")
+    '''
+    return logger
 
 def get_args():
     parser = argparse.ArgumentParser('pre-training script for Complementary sampling', add_help=False)
@@ -226,6 +255,7 @@ def vit_base_patch4(**kwargs):
     return model
 # vit_base_for_cifar = modeling_cae.cae_base_cifar()
 def main(args):
+    
     utils.init_distributed_mode(args)
 
     print(args)
@@ -282,8 +312,12 @@ def main(args):
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
         log_writer = utils.TensorboardLogger(log_dir=args.log_dir)
+        
     else:
         log_writer = None
+
+    if global_rank == 0:
+        logger = init_logger(opts.output_dir)
 #sampler=sampler_train,
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
@@ -347,7 +381,7 @@ def main(args):
             data_loader_train.sampler.set_epoch(epoch)
         if log_writer is not None:
             log_writer.set_step(epoch * num_training_steps_per_epoch)
-                
+        one_epoch_start_time =   time.time()      
         train_stats = train_one_epoch_decoupled(
             encoder,decoder, d_vae, data_loader_train,
             encoder_optimizer,decoder_optimizer, device, epoch, loss_scaler,
@@ -357,6 +391,8 @@ def main(args):
             wd_schedule_values=wd_schedule_values,
             args=args,
         )
+        one_epoch_end_time =   time.time()   
+        logger.info(f"One Eopch Time:{one_epoch_end_time-one_epoch_start_time}") 
         if args.output_dir:
             if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:
                 utils.save_model(
@@ -378,6 +414,7 @@ def main(args):
 
 if __name__ == '__main__':
     opts = get_args()
+    
     if opts.output_dir:
         Path(opts.output_dir).mkdir(parents=True, exist_ok=True)
     main(opts)

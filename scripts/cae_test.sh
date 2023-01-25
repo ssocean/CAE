@@ -1,25 +1,17 @@
-# tmp_my_name=${0##*/}
-# my_name=${tmp_my_name%.*}
-# my_name = cae-test
-OUTPUT_DIR='/opt/data/private/CAE/output/cae-modified-teacher-0117'
+
+OUTPUT_DIR='/opt/data/private/CAE/output/cae-Varify'
 DATA_PATH=/opt/data/private/dataset
 TOKENIZER_PATH=/opt/data/private/CAE/tokenizer-weights
 
 ADDRESS=127.0.0.1                                                                                
 NNODES=1     
 RANK=0                                                                                                                        
-
-# ============================ pretraining ============================
-# OMP_NUM_THREADS=1 python3 -m torch.distributed.launch \
-#   --nproc_per_node=1 \
-#   --nnodes=$NNODES \
-#   --node_rank=$RANK \
-#   --master_addr=$ADDRESS \
-#   --master_port=8899 \
+# cae_same_encoder
+# cae_SL
 OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=1 MKL_NUM_THREADS=1 python3 /opt/data/private/CAE/tools/run_pretraining-cifar.py \
   --data_path ${DATA_PATH} \
   --output_dir ${OUTPUT_DIR} \
-  --model cae_base_cifar --discrete_vae_weight_path ${TOKENIZER_PATH} \
+  --model cae_same_encoder --discrete_vae_weight_path ${TOKENIZER_PATH} \
   --batch_size 32 --lr 1.5e-3 --warmup_epochs 20 --epochs 800 \
   --clip_grad 3.0 --layer_scale_init_value 0.1 \
   --imagenet_default_mean_and_std \

@@ -1,4 +1,4 @@
-OUTPUT_DIR='/opt/data/private/CAE/output/cae-test-FT-3'
+OUTPUT_DIR='/opt/data/private/CAE/output/cae-0109-naive-com-FT'
 DATA_PATH=/opt/data/private/dataset
 TOKENIZER_PATH=/opt/data/private/CAE/tokenizer-weights
 
@@ -6,9 +6,9 @@ ADDRESS=127.0.0.1
 NNODES=1     
 RANK=0                                                                                                                
 
-MODEL_PATH=/opt/data/private/CAE/output/cae-modified-teacher-0117/cae-test_checkpoint-299.pth
+MODEL_PATH=/opt/data/private/CAE/output/cae-cs-naive-0109/cae-test_checkpoint-59.pth
 
-OMP_NUM_THREADS=1 python3 -m torch.distributed.launch \
+OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=1 python3 -m torch.distributed.launch \
     --nproc_per_node=1 \
     --nnodes=$NNODES \
     --node_rank=$RANK \

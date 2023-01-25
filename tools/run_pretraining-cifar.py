@@ -235,7 +235,7 @@ def main(args):
     np.random.seed(seed)
 
     cudnn.benchmark = True
-    args.model = 'cae_base_cifar'
+    # args.model = 'cae_base_cifar'
     model = get_model(args)
     '''
             args.model,

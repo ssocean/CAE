@@ -1,14 +1,14 @@
 # tmp_my_name=${0##*/}
 # my_name=${tmp_my_name%.*}
 # my_name = cae-test
-OUTPUT_DIR='/opt/data/private/CAE/output/cae-decoupled-0120'
+OUTPUT_DIR='/opt/data/private/CAE/output/cae-decoupled-0125'
 DATA_PATH=/opt/data/private/dataset
 TOKENIZER_PATH=/opt/data/private/CAE/tokenizer-weights
 ADDRESS=127.0.0.1                                                                                
 NNODES=1     
 RANK=0                                                                                                                        
 
-CUDA_VISIBLE_DEVICES=0,1 python3 -m torch.distributed.launch --nproc_per_node=2 /opt/data/private/CAE/tools/pretraining_decoupled.py \
+OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0 python3 -m torch.distributed.launch --nproc_per_node=1 /opt/data/private/CAE/tools/pretraining_decoupled.py \
   --data_path ${DATA_PATH} \
   --output_dir ${OUTPUT_DIR} \
   --model com_cae_cifar --discrete_vae_weight_path ${TOKENIZER_PATH} \
@@ -23,10 +23,9 @@ CUDA_VISIBLE_DEVICES=0,1 python3 -m torch.distributed.launch --nproc_per_node=2 
   --num_mask_patches 16 \
   --decoder_layer_scale_init_value 0.1 \
   --no_auto_resume \
-  --save_ckpt_freq 5 \
+  --save_ckpt_freq 3 \
   --exp_name cae-test \
   --regressor_depth 4 \
   --decoder_depth 4 \
   --align_loss_weight 2 \
   --num_workers 0
-

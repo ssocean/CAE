@@ -366,10 +366,10 @@ def main(args, ds_init):
             
         for key in list(checkpoint_model.keys()):
             if key.startswith('decoder.'):
-                # print("key:", key)
+                print("key:", key)
                 checkpoint_model.pop(key)
             if key.startswith('teacher.'):
-                # print("key:", key)
+                print("key:", key)
                 checkpoint_model.pop(key)
 
         # NOTE: replace norm with fc_norm
